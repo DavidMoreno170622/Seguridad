@@ -37,4 +37,10 @@
 
 ![captura](./img/21.png)
 
+### Firmamos la clave del prfesor y desencriptamos el mensaje a otro fichero, el cual podemos verificar, despues creamos un fichero con un mensaje y lo firmamos para que sea de 1 fichero 
 
+![captura](./img/22.png)
+
+### Ahora el fichero firmado lo encriptamos con la clave del profesor
+
+![captura](./img/23.png)
