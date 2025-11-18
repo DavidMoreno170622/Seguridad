@@ -1,0 +1,5 @@
+Utiliza los siguientes datos para conectar:
+
+Usuario: client1
+Password:123
+Contraseña del certificado: 12345678
