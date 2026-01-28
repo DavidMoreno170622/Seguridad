@@ -1,0 +1,178 @@
+
+2															1? Shebang
+#!/bin/bash
+
+
+Indica que el script se ejecuta con bash.
+
+2? Limpieza total
+iptables -F
+iptables -t nat -F
+iptables -X
+
+
+? Esto hace:
+
+-F -> Borra todas las reglas de las cadenas por defecto
+
+-t nat -F -> Borra reglas de la tabla NAT
+
+-X -> Elimina cadenas personalizadas
+
+? Resultado: iptables queda en blanco, sin reglas previas.
+
+3? Activar el reenvío de paquetes (router)
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+
+? Permite que el sistema reenvíe tráfico entre interfaces
+Sin esto:
+
+LAN y DMZ no podrían salir a Internet
+
+? Básico para que el servidor actúe como router/firewall.
+
+4? Políticas por defecto (muy importante)
+iptables -P INPUT DROP
+iptables -P FORWARD DROP
+iptables -P OUTPUT ACCEPT
+
+
+? Significa:
+
+INPUT -> DROP
+
+Todo lo que entra al firewall se bloquea
+
+Solo se permitirá lo que tú autorices explícitamente
+
+FORWARD -> DROP
+
+Todo tráfico entre redes (LAN <-> Internet, LAN <-> DMZ, etc.) está bloqueado por defecto
+
+OUTPUT -> ACCEPT
+
+El firewall puede salir libremente
+
+? Enfoque de seguridad estricta (deny all, allow specific).
+
+5? NAT - Masquerade (salida a Internet)
+? LAN
+iptables -t nat -A POSTROUTING -s 10.10.10.0/24 -o enp0s3 -j MASQUERADE
+
+
+? Qué hace:
+
+Los equipos de la LAN salen a Internet
+
+Se oculta su IP privada detrás de la IP pública del firewall
+
+? Sin esto, la LAN no tendría Internet.
+
+? DMZ
+iptables -t nat -A POSTROUTING -s 172.16.10.0/24 -o enp0s3 -j MASQUERADE
+
+
+? Igual que antes, pero para la DMZ.
+
+6? LAN -> Web (HTTP/HTTPS)
+Salida LAN -> Internet
+iptables -A FORWARD -i enp0s8 -o enp0s3 -s 10.10.10.0/24 -p tcp --dport 80 -j ACCEPT
+iptables -A FORWARD -i enp0s8 -o enp0s3 -s 10.10.10.0/24 -p tcp --dport 443 -j ACCEPT
+
+
+? Permite:
+
+LAN navegar por HTTP (80) y HTTPS (443)
+
+Respuestas Internet -> LAN
+iptables -A FORWARD -i enp0s3 -o enp0s8 -d 10.10.10.0/24 -p tcp --sport 80 -j ACCEPT
+iptables -A FORWARD -i enp0s3 -o enp0s8 -d 10.10.10.0/24 -p tcp --sport 443 -j ACCEPT
+
+
+? Permite:
+
+Que las respuestas de los servidores web vuelvan a la LAN
+
+? No usas ESTABLISHED,RELATED, lo haces a mano por puertos (válido, pero más largo).
+
+7? LAN -> Correo
+--dport 110   # POP3
+--dport 995   # POP3S
+--dport 143   # IMAP
+--dport 993   # IMAPS
+
+
+? Permite que la LAN:
+
+Lea correo (POP3 / IMAP)
+
+En versiones seguras y no seguras
+
+Y luego:
+
+--sport 110 / 995 / 143 / 993
+
+
+? Permite las respuestas desde Internet hacia la LAN.
+
+8? LAN -> Ping
+iptables -A FORWARD -i enp0s8 -o enp0s3 -p icmp --icmp-type echo-request -j ACCEPT
+iptables -A FORWARD -i enp0s3 -o enp0s8 -p icmp --icmp-type echo-reply -j ACCEPT
+
+
+? Permite:
+
+LAN hacer ping a Internet
+
+Recibir la respuesta
+
+9? LAN -> DMZ + ping
+iptables -A FORWARD -i enp0s8 -o enp0s9 -s 10.10.10.0/24 -d 172.16.10.0/24 -j ACCEPT
+
+
+? LAN puede acceder libremente a la DMZ (todos los protocolos).
+
+Ping entre LAN y DMZ
+icmp echo-request
+
+
+? Permite ping:
+
+LAN -> DMZ
+
+DMZ -> LAN
+
+? DMZ -> Web
+iptables -A FORWARD -i enp0s9 -o enp0s3 -s 172.16.10.0/24 -p tcp --dport 80 -j ACCEPT
+iptables -A FORWARD -i enp0s9 -o enp0s3 -s 172.16.10.0/24 -p tcp --dport 443 -j ACCEPT
+
+
+? La DMZ:
+
+Puede navegar por web (HTTP/HTTPS)
+
+Y las respuestas:
+
+--sport 80 / 443
+
+
+? Vuelven correctamente a la DMZ.
+
+? Resumen rápido
+
+? LAN:
+
+Internet (web, correo, ping)
+
+Acceso a DMZ
+
+? DMZ:
+
+Internet (solo web)
+
+Ping con LAN
+
+? Todo lo demás:
+
+Bloqueado por defecto
